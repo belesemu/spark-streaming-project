@@ -34,4 +34,4 @@ sql = ["numpy (>=1.15,<2)", "pandas (>=1.0.5)", "pyarrow (>=4.0.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "094df4414c01a57c06d1c0dce08cabbd2e043774c310578058eb8393765bdd04"
+content-hash = "06048195345974300042594436814c3944867a91f72183c5b4dc1e61f857b959"

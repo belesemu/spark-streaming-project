@@ -3,6 +3,8 @@ import time
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import StructType, StructField, StringType, FloatType
+from data_storage import save_to_hive
+
 
 # Initialize the Spark session
 spark = SparkSession.builder \
@@ -58,5 +60,8 @@ if __name__ == "__main__":
     bitcoin_df = simulate_bitcoin_stream()
     process_streamed_data(bitcoin_df)
 
+    # Save the streamed data to Hive
+    save_to_hive(bitcoin_df, "bitcoin_price_data")
     # Stop the Spark session
+
     spark.stop()
