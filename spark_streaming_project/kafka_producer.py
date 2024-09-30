@@ -1,14 +1,20 @@
-from kafka import KafkaProducer
+
+ 
+from confluent_kafka import Producer
 import requests
 import time
-import json
-
-# Initialize the Kafka producer
-producer = KafkaProducer(
-    bootstrap_servers=['localhost:9092'],
-    value_serializer=lambda v: json.dumps(v).encode('utf-8')
-)
-
+ 
+# Kafka Producer configuration
+producer_conf = {'bootstrap.servers': 'localhost:9092'}
+producer = Producer(producer_conf)
+ 
+# Delivery callback for Kafka producer
+def delivery_report(err, msg):
+    if err is not None:
+        print(f"Message delivery failed: {err}")
+    else:
+        print(f"Message delivered to {msg.topic()} [{msg.partition()}]")
+ 
 # Function to fetch Bitcoin prices
 def fetch_bitcoin_price():
     try:
@@ -21,9 +27,9 @@ def fetch_bitcoin_price():
     except Exception as e:
         print(f"Error fetching data: {e}")
         return None
-
-# Stream Bitcoin prices to Kafka topic
-def stream_bitcoin_data():
+ 
+# Stream Bitcoin prices to Kafka
+def stream_bitcoin_data_to_kafka():
     while True:
         price = fetch_bitcoin_price()
         if price is not None:
@@ -31,9 +37,10 @@ def stream_bitcoin_data():
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "price": price
             }
-            producer.send('bitcoin-prices', data)
-            print(f"Sent data: {data}")
-        time.sleep(5)  # Sleep for 5 seconds before fetching again
-
+            producer.produce('bitcoin-prices', key="bitcoin", value=str(data), callback=delivery_report)
+            producer.poll(0)
+            print(f"Sent data to Kafka: {data}")
+        time.sleep(5)
+ 
 if __name__ == "__main__":
-    stream_bitcoin_data()
+    stream_bitcoin_data_to_kafka()

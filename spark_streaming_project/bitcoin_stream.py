@@ -1,18 +1,24 @@
 import requests
 import time
+from confluent_kafka import Producer
 from pyspark.sql import SparkSession
-from pyspark.sql import functions as F
-from pyspark.sql.types import StructType, StructField, StringType, FloatType
-from data_storage import save_to_hive
-
-
-# Initialize the Spark session
-spark = SparkSession.builder \
-    .appName("BitcoinPriceStreaming") \
-    .getOrCreate()
-
-spark.sparkContext.setLogLevel("WARN")
-# Function to fetch real-time Bitcoin prices
+from pyspark.sql.functions import from_json, col
+from pyspark.sql.types import StructType, StringType, FloatType
+ 
+# Kafka Producer configuration
+producer_conf = {
+    'bootstrap.servers': 'localhost:9092'
+}
+producer = Producer(producer_conf)
+ 
+# Delivery callback for Kafka producer
+def delivery_report(err, msg):
+    if err is not None:
+        print(f"Message delivery failed: {err}")
+    else:
+        print(f"Message delivered to {msg.topic()} [{msg.partition()}]")
+ 
+# Function to fetch Bitcoin prices
 def fetch_bitcoin_price():
     try:
         response = requests.get('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd')
@@ -24,44 +30,51 @@ def fetch_bitcoin_price():
     except Exception as e:
         print(f"Error fetching data: {e}")
         return None
-
-# Simulate the stream by fetching Bitcoin prices every 5 seconds
-def simulate_bitcoin_stream():
-    schema = StructType([
-        StructField("timestamp", StringType(), True),
-        StructField("price", FloatType(), True)
-    ])
-
-    # Create an empty DataFrame to hold the streaming data
-    data = []
-
-    for _ in range(10):  # Stream for 10 intervals
+ 
+# Stream Bitcoin prices to Kafka
+def stream_bitcoin_data_to_kafka():
+    while True:
         price = fetch_bitcoin_price()
         if price is not None:
-            current_time = time.strftime("%Y-%m-%d %H:%M:%S")
-            data.append((current_time, price))
-            print(f"Fetched Bitcoin price: {price} USD at {current_time}")
-        
-        time.sleep(5)  # Wait 5 seconds before fetching the next price
-
-    # Create a DataFrame from the fetched data
-    df = spark.createDataFrame(data, schema)
-    return df
-# Process the streamed data
-def process_streamed_data(df):
-    df.show()
-
-    # Calculate moving average over the last 3 intervals
-    moving_avg = df.withColumn("moving_avg", F.avg("price").over(Window.rowsBetween(-2, 0)))
-    moving_avg.show()
-
-# Main execution
+            data = {
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "price": price
+            }
+            producer.produce('bitcoin-prices', key="bitcoin", value=str(data), callback=delivery_report)
+            producer.poll(0)
+            print(f"Sent data to Kafka: {data}")
+        time.sleep(5)
+ 
+# Kafka consumer using Spark Streaming
+def consume_bitcoin_data_from_kafka():
+    schema = StructType([
+        ("timestamp", StringType()),
+        ("price", FloatType())
+    ])
+ 
+    spark = SparkSession.builder \
+        .appName("BitcoinPriceStreamingWithKafka") \
+        .getOrCreate()
+ 
+    df = spark \
+        .readStream \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", "localhost:9092") \
+        .option("subscribe", "bitcoin-prices") \
+        .option("startingOffsets", "latest") \
+        .load()
+ 
+    df = df.selectExpr("CAST(value AS STRING)") \
+           .select(from_json(col("value"), schema).alias("data")) \
+           .select("data.*")
+ 
+    query = df.writeStream \
+        .outputMode("append") \
+        .format("console") \
+        .start()
+ 
+    query.awaitTermination()
+ 
 if __name__ == "__main__":
-    bitcoin_df = simulate_bitcoin_stream()
-    process_streamed_data(bitcoin_df)
-
-    # Save the streamed data to Hive
-    save_to_hive(bitcoin_df, "bitcoin_price_data")
-    # Stop the Spark session
-
-    spark.stop()
+    stream_bitcoin_data_to_kafka()
+    consume_bitcoin_data_from_kafka()
