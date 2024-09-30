@@ -1,9 +1,20 @@
 # spark-streaming-project
 
-to run this project 
+# to run this project 
 
-# you need to install python3, pyspak 
-# install poetry enviroment manager, activate the project using poetry init ,first initalize poetry virutal enviroment, that will install all the neccessy pakages fot the project 
+# you need to install python3, pyspak, hive 
+
+
+# install poetry enviroment manager, 
+# poetry install to install al dependencies
+# poetry shell  
+ 
 # cd to the directory spark_streaming_project 
-# run python3 dashboard 
-# copy the url from the terminal to see the visualization on your browser 
+# python3 kafka_producer.py to run the kafka producer 
+# spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2 12:3.5.3 spark_streaming_kafka.py
+# python3 dashboard.py to run the kafka producer 
+# pspark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3 data_storage.py
+
+
+
+
